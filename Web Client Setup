@@ -1,0 +1,3 @@
+cd web_client
+npm install
+npm start

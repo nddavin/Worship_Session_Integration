@@ -1,0 +1,40 @@
+Worship_Session_Integration/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                 # FastAPI entrypoint
+│   │   ├── database.py             # SQLAlchemy + session setup
+│   │   ├── models.py               # DB models (User, AudioFile, Playlist)
+│   │   ├── auth.py                 # JWT auth & user dependency
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── uploads.py          # Upload presign + complete endpoints
+│   │   │   ├── users.py            # User CRUD endpoints
+│   │   │   └── playlists.py        # Playlist/session endpoints
+│   │   ├── tasks.py                # Celery tasks (transcoding, metadata)
+│   │   └── utils.py                # helpers (s3/gcs/azure upload)
+│   ├── Dockerfile                  # Backend container
+│   └── requirements.txt
+├── worker/
+│   ├── Dockerfile                  # Celery worker container
+│   └── app/
+│       ├── __init__.py
+│       └── tasks.py                # Celery tasks imported from backend
+├── web_client/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── App.tsx
+│   ├── package.json
+│   └── tsconfig.json
+├── mobile_client/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── screens/
+│   │   └── App.tsx
+│   ├── package.json
+│   └── tsconfig.json
+├── setup_venv.sh                   # Venv creation + dependencies install
+├── docker-compose.yml
+├── README.md
+└── .env                            # Environment variables (DB, JWT, cloud)
