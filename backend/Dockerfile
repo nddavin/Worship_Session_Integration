@@ -1,33 +1,42 @@
-# Use official Python image
-FROM python:3.11-slim
+# Use a more secure, slim Bullseye-based Python image
+FROM python:3.11.10-slim-bullseye AS base
 
-# Set workdir
+# Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# - build-essential: compilation
+# - libpq-dev: PostgreSQL client
+# - ffmpeg: audio processing
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        ffmpeg \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy setup script and requirements
+# Copy setup script & requirements
 COPY setup_venv.sh requirements.txt ./
 
 # Make setup script executable
 RUN chmod +x setup_venv.sh
 
-# Run setup script to create venv and install dependencies
+# Run setup script to create virtual environment & install dependencies
 RUN ./setup_venv.sh
 
-# Copy backend code
+# Copy backend application code
 COPY app ./app
 
-# Set environment variables
+# Add virtualenv to PATH
 ENV PATH="/app/venv/bin:$PATH"
 
-# Expose port
+# Expose FastAPI port
 EXPOSE 8000
 
-# Start FastAPI server
+# Use a non-root user for security
+RUN useradd -m appuser
+USER appuser
+
+# Command to start FastAPI
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
