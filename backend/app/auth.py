@@ -1,53 +1,76 @@
-import os
-from datetime import datetime, timedelta
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
-from passlib.context import CryptContext
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.orm import Session
-from .database import get_db
-from .models import User
+from jose import jwt
+from jose.exceptions import JWTError
+from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+import os
 
-SECRET_KEY = os.getenv("SECRET_KEY", "devsecret")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_EXPIRE_MINUTES = int(os.getenv("ACCESS_EXPIRE_MINUTES", 10))
-REFRESH_EXPIRE_DAYS = int(os.getenv("REFRESH_EXPIRE_DAYS", 7))
+# Assuming these functions are defined in another module
+from auth_utils import create_access_token, create_refresh_token, verify_password
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# Assuming get_db is defined in a separate module, for example, database.py
+from database import get_db
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+# Assuming User and Audio models are defined in models.py
+from models import User, Audio, Playlist
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+# Configure the router
+router = APIRouter()
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def create_refresh_token(data: dict, expires_delta: timedelta = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(days=REFRESH_EXPIRE_DAYS))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+# Define the login endpoint
+@router.post("/login", response_model=Dict[str, Any])
+def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
     user = db.query(User).filter(User.username == username).first()
-    if user is None:
-        raise credentials_exception
-    return user
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+    if not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+
+    # Create access and refresh tokens
+    access_token = create_access_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.username})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "refresh_token": refresh_token,
+        "refresh_token_expires_in": os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", "30"),
+        "access_token_expires_in": os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
+    }
+
+# Define the refresh endpoint
+@router.post("/refresh", response_model=Dict[str, Any])
+def refresh(
+    refresh_token: str = Form(...),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    try:
+        # Decode the refresh token
+        refresh_token_data = jwt.decode(
+            refresh_token,
+            os.getenv("JWT_SECRET_KEY", ""),
+            algorithms=[os.getenv("JWT_ALGORITHM", "HS256")]
+        )
+        username = refresh_token_data.get("sub")
+        if not username:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+        # Create a new access token
+        access_token = create_access_token(data={"sub": user.username})
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "access_token_expires_in": os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
+        }
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
