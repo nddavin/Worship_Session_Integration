@@ -1,76 +1,42 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi import APIRouter, Depends, Form, HTTPException, status
 from sqlalchemy.orm import Session
-from jose import jwt
-from jose.exceptions import JWTError
-from typing import Any, Dict
-from datetime import datetime, timedelta, timezone
-import os
+import jose.jwt
+import jose.exceptions
+from .models import User
+from .database import get_db
 
-# Assuming these functions are defined in another module
-from auth_utils import create_access_token, create_refresh_token, verify_password
-
-# Assuming get_db is defined in a separate module, for example, database.py
-from database import get_db
-
-# Assuming User and Audio models are defined in models.py
-from models import User, Audio, Playlist
-
-# Configure the router
 router = APIRouter()
 
-# Define the login endpoint
-@router.post("/login", response_model=Dict[str, Any])
-def login(
+@router.post("/token")
+async def login_for_access_token(
     username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:
+):
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
-    if not verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
-
-    # Create access and refresh tokens
-    access_token = create_access_token(data={"sub": user.username})
-    refresh_token = create_refresh_token(data={"sub": user.username})
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "refresh_token": refresh_token,
-        "refresh_token_expires_in": os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", "30"),
-        "access_token_expires_in": os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
-    }
-
-# Define the refresh endpoint
-@router.post("/refresh", response_model=Dict[str, Any])
-def refresh(
-    refresh_token: str = Form(...),
-    db: Session = Depends(get_db)
-) -> Dict[str, Any]:
-    try:
-        # Decode the refresh token
-        refresh_token_data = jwt.decode(
-            refresh_token,
-            os.getenv("JWT_SECRET_KEY", ""),
-            algorithms=[os.getenv("JWT_ALGORITHM", "HS256")]
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        username = refresh_token_data.get("sub")
-        if not username:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    if not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
-        user = db.query(User).filter(User.username == username).first()
-        if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+# Ensure verify_password and create_access_token are defined or imported
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # Implement password verification logic
+    pass
 
-        # Create a new access token
-        access_token = create_access_token(data={"sub": user.username})
-
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "access_token_expires_in": os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
-        }
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
+    # Implement token creation logic
+    pass

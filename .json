@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "lint": "pylint /Volumes/window\\ 2/WebApps/Worship_Session_Integration/backend/app"
+  }
+}
