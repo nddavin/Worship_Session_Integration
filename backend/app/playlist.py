@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
-from models import Base, User, Audio
+from .models import Base, User
+from .audio import Audio
 
 # Playlist Model
 class Playlist(Base):

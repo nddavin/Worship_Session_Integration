@@ -114,5 +114,3 @@ This version is fully **markdownlint-compliant** and ready for deployment or rep
 
 If you want, I can also **add a table of contents with clickable links** for better readability in large projects.  
 
-Do you want me to do that?
-```
